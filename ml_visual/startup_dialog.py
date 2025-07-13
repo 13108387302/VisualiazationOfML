@@ -285,7 +285,7 @@ class StartupDialog(QDialog):
         recent_projects = self.settings.value('recent_projects', [])
         
         for project_path in recent_projects:
-            if os.path.exists(project_path):
+            if project_path and os.path.exists(project_path):
                 project_info = self.load_project_info(project_path)
                 item = ProjectItem(project_path, project_info)
                 self.project_list.addItem(item)

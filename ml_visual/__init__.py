@@ -14,6 +14,9 @@ from .canvas import MLCanvas
 from .component_library import ComponentLibrary
 from .property_panel import PropertyPanel
 from .startup_dialog import StartupDialog
+from .execution_panel import ExecutionPanel
+from .data_preview import DataPreviewPanel
+from .backend_adapter import BackendAdapter, backend_adapter
 
 __all__ = [
     'MLVisualizationUI',
@@ -23,5 +26,9 @@ __all__ = [
     'MLCanvas',
     'ComponentLibrary',
     'PropertyPanel',
-    'StartupDialog'
+    'StartupDialog',
+    'ExecutionPanel',
+    'DataPreviewPanel',
+    'BackendAdapter',
+    'backend_adapter'
 ]

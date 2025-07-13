@@ -6,7 +6,7 @@
 """
 
 import json
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QSplitter,
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
                              QToolBar, QMenuBar, QStatusBar, QMessageBox,
                              QFileDialog, QApplication)
 from PyQt5.QtCore import Qt, QTimer
@@ -16,6 +16,9 @@ from .canvas import MLCanvas
 from .component_library import ComponentLibrary
 from .property_panel import PropertyPanel
 from .startup_dialog import StartupDialog
+from .execution_panel import ExecutionPanel
+from .data_preview import DataPreviewPanel
+from .backend_adapter import backend_adapter
 
 
 class MLVisualizationUI(QMainWindow):
@@ -39,6 +42,7 @@ class MLVisualizationUI(QMainWindow):
         # 连接新建项目信号
         def on_new_project():
             dialog.accept()
+            dialog.selected_project_path=None
 
         dialog.new_project_requested.connect(on_new_project)
 
@@ -182,35 +186,56 @@ class MLVisualizationUI(QMainWindow):
         """创建主界面"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
+
         # 主布局
         main_layout = QHBoxLayout(central_widget)
-        
-        # 创建分割器
-        splitter = QSplitter(Qt.Horizontal)
-        
+
+        # 创建主分割器（水平）
+        main_splitter = QSplitter(Qt.Horizontal)
+
         # 左侧面板 - 组件库
         self.component_library = ComponentLibrary()
         self.component_library.setMaximumWidth(250)
         self.component_library.setMinimumWidth(200)
-        
-        # 中间 - 画布
+
+        # 中间区域 - 画布和执行面板
+        center_widget = QWidget()
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 画布
         self.canvas = MLCanvas()
-        
-        # 右侧面板 - 属性配置
+        center_layout.addWidget(self.canvas, 3)  # 占3/4空间
+
+        # 执行面板
+        self.execution_panel = ExecutionPanel()
+        center_layout.addWidget(self.execution_panel, 1)  # 占1/4空间
+
+        # 右侧分割器（垂直）
+        right_splitter = QSplitter(Qt.Vertical)
+
+        # 属性配置面板
         self.property_panel = PropertyPanel()
-        self.property_panel.setMaximumWidth(300)
-        self.property_panel.setMinimumWidth(250)
-        
-        # 添加到分割器
-        splitter.addWidget(self.component_library)
-        splitter.addWidget(self.canvas)
-        splitter.addWidget(self.property_panel)
-        
-        # 设置分割器比例
-        splitter.setSizes([250, 850, 300])
-        
-        main_layout.addWidget(splitter)
+        right_splitter.addWidget(self.property_panel)
+
+        # 数据预览面板
+        self.data_preview_panel = DataPreviewPanel()
+        right_splitter.addWidget(self.data_preview_panel)
+
+        # 设置右侧分割器比例
+        right_splitter.setSizes([300, 300])
+        right_splitter.setMaximumWidth(350)
+        right_splitter.setMinimumWidth(300)
+
+        # 添加到主分割器
+        main_splitter.addWidget(self.component_library)
+        main_splitter.addWidget(center_widget)
+        main_splitter.addWidget(right_splitter)
+
+        # 设置主分割器比例
+        main_splitter.setSizes([250, 800, 350])
+
+        main_layout.addWidget(main_splitter)
         
     def connect_signals(self):
         """连接信号"""
@@ -218,9 +243,28 @@ class MLVisualizationUI(QMainWindow):
         self.canvas.component_selected.connect(self.on_component_selected)
         self.canvas.component_added.connect(self.on_component_added)
         self.canvas.connection_created.connect(self.on_connection_created)
-        
+
         # 属性面板信号
         self.property_panel.property_changed.connect(self.on_property_changed)
+
+        # 执行面板信号
+        self.execution_panel.execution_requested.connect(self.on_execution_requested)
+        self.execution_panel.stop_requested.connect(self.on_stop_requested)
+
+        # 数据预览面板信号
+        self.data_preview_panel.data_requested.connect(self.on_data_requested)
+        self.data_preview_panel.statistics_requested.connect(self.on_statistics_requested)
+        self.data_preview_panel.chart_requested.connect(self.on_chart_requested)
+
+        # 后端适配器信号
+        backend_adapter.execution_started.connect(self.on_execution_started)
+        backend_adapter.execution_progress.connect(self.on_execution_progress)
+        backend_adapter.execution_completed.connect(self.on_execution_completed)
+        backend_adapter.component_completed.connect(self.on_component_completed)
+        backend_adapter.data_preview_ready.connect(self.on_data_preview_ready)
+        backend_adapter.statistics_ready.connect(self.on_statistics_ready)
+        backend_adapter.chart_ready.connect(self.on_chart_ready)
+        backend_adapter.error_occurred.connect(self.on_backend_error)
         
     def on_component_selected(self, component):
         """组件选择处理"""
@@ -247,6 +291,77 @@ class MLVisualizationUI(QMainWindow):
         """属性改变处理"""
         self.statusBar().showMessage(f"属性已更改: {component.name}.{prop_name} = {value}")
         self.set_modified(True)
+
+    def on_execution_requested(self):
+        """执行请求处理"""
+        workflow_data = self.canvas.get_workflow_data()
+        if not workflow_data['components']:
+            QMessageBox.information(self, "提示", "请先添加组件到画布")
+            return
+
+        # 通过后端适配器执行工作流程
+        execution_id = backend_adapter.execute_workflow(workflow_data)
+        self.current_execution_id = execution_id
+        self.statusBar().showMessage("正在执行机器学习流程...")
+
+    def on_stop_requested(self):
+        """停止请求处理"""
+        if hasattr(self, 'current_execution_id'):
+            backend_adapter.stop_execution(self.current_execution_id)
+            self.statusBar().showMessage("正在停止执行...")
+
+    def on_data_requested(self, data_id):
+        """数据请求处理"""
+        backend_adapter.get_data_preview(data_id)
+
+    def on_statistics_requested(self, data_id):
+        """统计信息请求处理"""
+        backend_adapter.get_data_statistics(data_id)
+
+    def on_chart_requested(self, chart_type, data_id, config):
+        """图表请求处理"""
+        backend_adapter.generate_chart(chart_type, data_id, config)
+
+    def on_execution_started(self, execution_id):
+        """执行开始处理"""
+        self.execution_panel.add_log_message("工作流程开始执行", "INFO")
+
+    def on_execution_progress(self, execution_id, progress, current_step):
+        """执行进度处理"""
+        self.execution_panel.update_progress(progress, current_step)
+        self.execution_panel.add_log_message(f"正在执行: {current_step}", "INFO")
+
+    def on_execution_completed(self, execution_id, success, results):
+        """执行完成处理"""
+        self.execution_panel.execution_completed(success, results)
+        if success:
+            self.statusBar().showMessage("工作流程执行完成")
+        else:
+            self.statusBar().showMessage("工作流程执行失败")
+
+    def on_component_completed(self, execution_id, component_id, success, result):
+        """组件执行完成处理"""
+        status = "成功" if success else "失败"
+        message = f"组件 {result.get('name', component_id)} 执行{status}"
+        level = "SUCCESS" if success else "ERROR"
+        self.execution_panel.add_log_message(message, level)
+
+    def on_data_preview_ready(self, data_id, preview_data):
+        """数据预览就绪处理"""
+        self.data_preview_panel.update_data_preview(preview_data)
+
+    def on_statistics_ready(self, data_id, statistics):
+        """统计信息就绪处理"""
+        self.data_preview_panel.update_statistics(statistics)
+
+    def on_chart_ready(self, chart_id, chart_data):
+        """图表就绪处理"""
+        self.data_preview_panel.update_visualization(chart_data)
+
+    def on_backend_error(self, error_code, error_message, details):
+        """后端错误处理"""
+        self.execution_panel.add_log_message(f"错误: {error_message}", "ERROR")
+        QMessageBox.critical(self, "执行错误", f"{error_message}\n\n详情: {details}")
         
     def set_modified(self, modified):
         """设置修改状态"""
@@ -276,14 +391,7 @@ class MLVisualizationUI(QMainWindow):
             )
             if file_path:
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        project_data = json.load(f)
-                    
-                    self.canvas.load_workflow_data(project_data)
-                    self.current_file = file_path
-                    self.set_modified(False)
-                    self.statusBar().showMessage(f"已打开: {file_path}")
-                    
+                    self.load_project_file(file_path)
                 except Exception as e:
                     QMessageBox.critical(self, "错误", f"打开文件失败:\n{str(e)}")
         
@@ -291,14 +399,10 @@ class MLVisualizationUI(QMainWindow):
         """保存项目"""
         if self.current_file:
             self._save_to_file(self.current_file)
-            paths=self.dia.settings.value('recent_projects', [])
-            if self.current_file in paths:
-                paths.remove(self.current_file)
-            paths.insert(0, self.current_file)
-            paths=paths[:10]
-            self.dia.settings.setValue('recent_projects', paths)
+            self.dia.add_to_recent(self.current_file)
         else:
             self.save_project_as()
+            self.dia.add_to_recent(self.current_file)
             
     def save_project_as(self):
         """另存为项目"""
