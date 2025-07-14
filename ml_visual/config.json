@@ -1,0 +1,490 @@
+{
+  "application": {
+    "name": "ML Visual",
+    "version": "1.0.0",
+    "organization": "ML Visual Team",
+    "description": "机器学习可视化工具"
+  },
+  "ui": {
+    "window": {
+      "default_size": [1400, 900],
+      "minimum_size": [800, 600],
+      "title": "机器学习可视化工具",
+      "maximized": false,
+      "geometry": [100, 100]
+    },
+    "panels": {
+      "left_width": 300,
+      "right_width": 300,
+      "bottom_height": 200,
+      "splitter_sizes": [300, 900, 300],
+      "left_min_width": 200,
+      "left_max_width": 400,
+      "right_min_width": 250,
+      "right_max_width": 400,
+      "bottom_min_height": 150,
+      "bottom_max_height": 300
+    },
+    "layout": {
+      "main_margins": [5, 5, 5, 5],
+      "main_spacing": 5,
+      "panel_margins": [5, 5, 5, 5],
+      "canvas_margins": [5, 5, 5, 5]
+    },
+    "theme": {
+      "default": "light",
+      "available": ["light", "dark"]
+    },
+    "fonts": {
+      "default_family": "Arial",
+      "default_size": 12,
+      "title_size": 15,
+      "subtitle_size": 10,
+      "code_family": "Consolas",
+      "bold_weight": 700,
+      "canvas_status_size": 12
+    },
+    "colors": {
+      "primary": "#0078d4",
+      "secondary": "#6c757d",
+      "success": "#28a745",
+      "warning": "#ffc107",
+      "error": "#dc3545",
+      "info": "#17a2b8",
+      "background": "#f5f5f5",
+      "surface": "#ffffff",
+      "text": "#212529",
+      "border": "#dee2e6",
+      "canvas_bg": "#ffffff",
+      "canvas_border": "#bdc3c7",
+      "toolbar_bg": "#ecf0f1",
+      "toolbar_border": "#bdc3c7",
+      "toolbar_hover": "#d5dbdb",
+      "title_color": "#2c3e50",
+      "status_color": "#7f8c8d"
+    },
+    "styles": {
+      "canvas_border_width": 2,
+      "canvas_border_radius": 5,
+      "toolbar_border_radius": 3,
+      "toolbar_padding": 2,
+      "button_padding": "4px 8px",
+      "button_margin": 1,
+      "button_border_radius": 3,
+      "title_padding": "5px"
+    },
+    "animations": {
+      "duration": 300,
+      "easing": "OutCubic"
+    },
+    "menu": {
+      "file_text": "文件(&F)",
+      "edit_text": "编辑(&E)",
+      "view_text": "视图(&V)",
+      "run_text": "运行(&R)",
+      "help_text": "帮助(&H)",
+      "theme_text": "主题(&T)"
+    },
+    "toolbar": {
+      "button_style": 2,
+      "spacing": 5
+    }
+  },
+  "canvas": {
+    "scene": {
+      "rect": [-2000, -2000, 4000, 4000],
+      "background_color": "#f5f5f5"
+    },
+    "grid": {
+      "enabled": true,
+      "size": 20,
+      "color": "#e0e0e0",
+      "snap_enabled": true
+    },
+    "zoom": {
+      "factor": 1.15,
+      "min_scale": 0.1,
+      "max_scale": 5.0,
+      "wheel_step": 0.15
+    },
+    "performance": {
+      "lod_enabled": true,
+      "lod_threshold_low": 0.3,
+      "lod_threshold_high": 0.8,
+      "cache_enabled": true,
+      "update_interval": 16,
+      "wheel_limit_fps": 60,
+      "wheel_time_limit": 0.016
+    },
+    "interaction": {
+      "keyboard_move_step": 1,
+      "keyboard_move_fast_step": 10,
+      "paste_offset": [20, 20],
+      "default_position": [0, 0]
+    },
+    "feedback": {
+      "error_color": "#dc3545",
+      "error_duration": 3000,
+      "success_color": "#28a745",
+      "warning_color": "#ffc107"
+    }
+  },
+  "components": {
+    "default_size": [120, 80],
+    "port_size": 8,
+    "selection_color": "#0078d4",
+    "selection_width": 3,
+    "border_color": "#666666",
+    "border_width": 2,
+    "background_color": "#ffffff",
+    "text_color": "#333333",
+    "corner_radius": 5,
+    "categories": {
+      "data": {
+        "name": "📊 数据处理",
+        "icon": "📊",
+        "color": "#e3f2fd"
+      },
+      "preprocess": {
+        "name": "🔧 预处理",
+        "icon": "🔧",
+        "color": "#f3e5f5"
+      },
+      "model": {
+        "name": "🤖 机器学习",
+        "icon": "🤖",
+        "color": "#e8f5e8"
+      },
+      "evaluation": {
+        "name": "📈 模型评估",
+        "icon": "📈",
+        "color": "#fff3e0"
+      },
+      "output": {
+        "name": "📤 输出导出",
+        "icon": "📤",
+        "color": "#fce4ec"
+      }
+    }
+  },
+  "component_library": {
+    "search": {
+      "background_color": "#f8f9fa",
+      "border_radius": "6px",
+      "padding": "5px",
+      "label_color": "#495057",
+      "input_border": "#dee2e6",
+      "input_focus_border": "#007bff",
+      "input_padding": "6px 10px",
+      "input_border_radius": "4px"
+    },
+    "tree": {
+      "border": "#dee2e6",
+      "border_radius": "6px",
+      "background_color": "white",
+      "item_padding": "4px 8px",
+      "item_border_bottom": "#f8f9fa",
+      "item_hover_bg": "#f8f9fa",
+      "item_selected_bg": "#e3f2fd",
+      "item_selected_color": "#1976d2"
+    },
+    "fonts": {
+      "search_label_family": "Arial",
+      "search_label_size": 9,
+      "search_input_size": 12
+    }
+  },
+  "connections": {
+    "line_width": 2,
+    "line_color": "#666666",
+    "selected_color": "#0078d4",
+    "hover_color": "#007bff",
+    "arrow_size": 8
+  },
+  "property_panel": {
+    "update_delay": 50,
+    "widget_height": 25,
+    "group_spacing": 15,
+    "label_width": 100
+  },
+  "execution": {
+    "log_max_lines": 1000,
+    "progress_update_interval": 100,
+    "status_colors": {
+      "info": "#17a2b8",
+      "success": "#28a745",
+      "warning": "#ffc107",
+      "error": "#dc3545"
+    }
+  },
+  "memory": {
+    "warning_threshold": 80.0,
+    "critical_threshold": 90.0,
+    "cleanup_interval": 30,
+    "monitor_interval": 5000,
+    "max_history": 100,
+    "pool_max_size": 100,
+    "status_update_interval": 5000
+  },
+  "search": {
+    "debounce_delay": 300,
+    "min_chars": 1,
+    "max_results": 50
+  },
+  "file": {
+    "project_extension": ".mlv",
+    "auto_save_interval": 300,
+    "backup_enabled": true,
+    "recent_projects_max": 10
+  },
+  "shortcuts": {
+    "file": {
+      "new": "Ctrl+N",
+      "open": "Ctrl+O",
+      "save": "Ctrl+S",
+      "save_as": "Ctrl+Shift+S",
+      "exit": "Ctrl+Q"
+    },
+    "edit": {
+      "undo": "Ctrl+Z",
+      "redo": "Ctrl+Y",
+      "copy": "Ctrl+C",
+      "paste": "Ctrl+V",
+      "cut": "Ctrl+X",
+      "delete": "Delete",
+      "select_all": "Ctrl+A"
+    },
+    "view": {
+      "zoom_in": "Ctrl++",
+      "zoom_out": "Ctrl+-",
+      "zoom_fit": "Ctrl+0",
+      "fullscreen": "F11"
+    },
+    "run": {
+      "execute": "F5",
+      "stop": "Shift+F5",
+      "step": "F10"
+    },
+    "navigation": {
+      "move_up": "Up",
+      "move_down": "Down",
+      "move_left": "Left",
+      "move_right": "Right",
+      "move_fast": "Shift",
+      "cancel": "Escape"
+    }
+  },
+  "notifications": {
+    "duration": 3000,
+    "max_count": 5,
+    "position": "top_right",
+    "width": 300
+  },
+  "startup": {
+    "dialog_size": [1100, 750],
+    "show_recent": true,
+    "max_recent_display": 10,
+    "load_delay": 200,
+    "notification_position": [320, 20],
+    "notification_duration": 1000,
+    "layout": {
+      "main_margins": [20, 20, 20, 20],
+      "main_spacing": 20,
+      "content_spacing": 20,
+      "card_spacing": 10,
+      "header_height": 120,
+      "header_margins": [30, 20, 30, 20],
+      "info_spacing": 20
+    },
+    "styles": {
+      "dialog_bg_gradient": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef)",
+      "header_bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #667eea, stop:1 #764ba2)",
+      "card_border": "2px solid #dee2e6",
+      "card_border_radius": "8px",
+      "card_bg": "rgba(255, 255, 255, 0.8)",
+      "button_bg": "#007bff",
+      "button_hover": "#0056b3",
+      "button_pressed": "#004085",
+      "button_padding": "10px 20px",
+      "button_border_radius": "6px",
+      "primary_button_bg": "#28a745",
+      "primary_button_hover": "#218838",
+      "primary_button_padding": "12px 24px",
+      "secondary_button_bg": "#6c757d",
+      "secondary_button_hover": "#545b62",
+      "list_border": "#dee2e6",
+      "list_item_padding": "8px",
+      "list_hover_bg": "#f8f9fa",
+      "list_selected_bg": "#e3f2fd",
+      "list_selected_color": "#1976d2"
+    },
+    "colors": {
+      "title_color": "white",
+      "subtitle_color": "rgba(255, 255, 255, 0.9)",
+      "info_color": "#6c757d",
+      "card_title_color": "#2c3e50",
+      "version_color": "#6c757d"
+    },
+    "fonts": {
+      "title_size": "32px",
+      "subtitle_size": "16px",
+      "card_title_size": "18px",
+      "info_size": "14px",
+      "version_size": "12px",
+      "button_size": "14px",
+      "primary_button_size": "16px"
+    },
+    "texts": {
+      "title": "ML Visual",
+      "subtitle": "机器学习可视化工具",
+      "quick_start_title": "🚀 快速开始",
+      "recent_projects_title": "📂 最近项目",
+      "new_project_text": "📝 创建新项目",
+      "open_project_text": "📂 打开现有项目",
+      "example_project_text": "🎯 浏览示例项目",
+      "open_button_text": "打开",
+      "remove_button_text": "移除",
+      "clear_button_text": "清空列表",
+      "version_text": "版本 1.0.0 | © 2024 ML Visual",
+      "new_guide_title": "新手指南：",
+      "new_guide_items": [
+        "• 创建新项目开始您的ML之旅",
+        "• 从组件库拖拽组件到画布",
+        "• 连接组件构建数据流",
+        "• 配置参数并运行工作流"
+      ]
+    },
+    "demo_project": {
+      "name": "示例项目",
+      "description": "机器学习基础流程示例",
+      "components": [
+        {
+          "id": "data_loader_1",
+          "type": "data",
+          "name": "数据加载",
+          "position": [100, 100],
+          "properties": {
+            "file_path": "data.csv",
+            "separator": ",",
+            "encoding": "utf-8"
+          }
+        },
+        {
+          "id": "preprocessor_1",
+          "type": "preprocess",
+          "name": "标准化",
+          "position": [300, 100],
+          "properties": {
+            "method": "Z-score"
+          }
+        },
+        {
+          "id": "model_1",
+          "type": "model",
+          "name": "随机森林",
+          "position": [500, 100],
+          "properties": {
+            "n_estimators": 100,
+            "max_depth": 10,
+            "random_state": 42
+          }
+        }
+      ],
+      "connections": [
+        {
+          "start_component": "data_loader_1",
+          "start_port": 0,
+          "end_component": "preprocessor_1",
+          "end_port": 0
+        },
+        {
+          "start_component": "preprocessor_1",
+          "start_port": 0,
+          "end_component": "model_1",
+          "end_port": 0
+        }
+      ]
+    }
+  },
+  "performance_limits": {
+    "max_components": 1000,
+    "max_connections": 2000,
+    "max_undo_steps": 100,
+    "render_distance": 1000
+  },
+  "debug": {
+    "enabled": false,
+    "log_level": "INFO",
+    "show_fps": false,
+    "show_memory": true
+  },
+  "messages": {
+    "ready": "就绪",
+    "new_project": "新建项目",
+    "component_selected": "已选择组件",
+    "component_added": "已添加组件",
+    "connection_created": "已连接",
+    "property_changed": "属性已更改",
+    "executing": "正在执行机器学习流程...",
+    "stopping": "正在停止执行...",
+    "execution_complete": "工作流程执行完成",
+    "execution_failed": "工作流程执行失败",
+    "copied": "已复制选中的组件",
+    "cut": "已剪切选中的组件",
+    "pasted": "已粘贴组件",
+    "deleted": "已删除选中的组件",
+    "selected_all": "已全选组件",
+    "saved": "已保存",
+    "opened": "已打开",
+    "zoom_in": "放大",
+    "zoom_out": "缩小",
+    "stop_execution": "停止执行",
+    "theme_switched": "已切换到主题",
+    "theme_switch_failed": "切换主题失败",
+    "add_components_first": "请先添加组件到画布",
+    "execution_started": "工作流程开始执行",
+    "executing_step": "正在执行",
+    "component_success": "执行成功",
+    "component_failed": "执行失败",
+    "selected_components": "已选择组件",
+    "no_selection": "就绪"
+  },
+  "status_bar": {
+    "separator": "|",
+    "component_count_format": "组件: {count}",
+    "zoom_format": "缩放: {percent}%",
+    "memory_format": "内存: {memory:.0f}MB",
+    "selected_format": "已选择 {count} 个组件"
+  },
+  "dialogs": {
+    "save_changes_title": "保存更改",
+    "save_changes_text": "项目已修改，是否保存更改？",
+    "open_project_title": "打开项目",
+    "save_project_title": "保存项目",
+    "project_filter": "ML Visual项目 (*.mlv);;所有文件 (*)",
+    "error_title": "错误",
+    "info_title": "提示",
+    "about_title": "关于",
+    "shortcuts_help_title": "快捷键帮助",
+    "execution_error_title": "执行错误"
+  },
+  "about": {
+    "title": "机器学习可视化工具 v1.0",
+    "description": "基于PyQt5开发的机器学习流程可视化工具\n类似Logisim的界面设计，支持拖拽组件构建ML流程",
+    "features": [
+      "• 可视化组件库",
+      "• 拖拽式流程构建",
+      "• 属性配置面板",
+      "• 项目保存/加载",
+      "• 后端接口预留"
+    ]
+  },
+  "zoom": {
+    "in_factor": 1.2,
+    "out_factor": 0.8
+  },
+  "timers": {
+    "status_message_delay": 2000,
+    "auto_save_interval": 300000
+  }
+}

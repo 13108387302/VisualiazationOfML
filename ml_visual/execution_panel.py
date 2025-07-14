@@ -113,23 +113,40 @@ class ExecutionLogWidget(QWidget):
         self.setLayout(layout)
         
     def add_log(self, message, level="INFO"):
-        """添加日志消息"""
+        """添加日志消息（优化性能）"""
         import datetime
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        
+
         level_colors = {
             "INFO": "#000000",
-            "WARNING": "#ff8c00", 
+            "WARNING": "#ff8c00",
             "ERROR": "#dc143c",
             "SUCCESS": "#008000"
         }
-        
+
         color = level_colors.get(level, "#000000")
         formatted_message = f'<span style="color: gray;">[{timestamp}]</span> <span style="color: {color};">[{level}]</span> {message}'
-        
+
+        # 限制日志条数，避免内存过度使用
+        if self.log_text.document().blockCount() > 1000:
+            cursor = self.log_text.textCursor()
+            cursor.movePosition(cursor.Start)
+            cursor.movePosition(cursor.Down, cursor.KeepAnchor, 100)  # 删除前100行
+            cursor.removeSelectedText()
+
         self.log_text.append(formatted_message)
-        
-        # 自动滚动到底部
+
+        # 批量滚动，减少UI更新频率
+        if not hasattr(self, '_scroll_timer'):
+            from PyQt5.QtCore import QTimer
+            self._scroll_timer = QTimer()
+            self._scroll_timer.setSingleShot(True)
+            self._scroll_timer.timeout.connect(self._scroll_to_bottom)
+
+        self._scroll_timer.start(100)  # 100ms后滚动
+
+    def _scroll_to_bottom(self):
+        """滚动到底部"""
         scrollbar = self.log_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
         
@@ -383,9 +400,17 @@ class ExecutionPanel(QWidget):
             
     def update_execution_status(self):
         """更新执行状态（定时调用）"""
-        # 这里应该调用后端接口获取实际状态
-        # 暂时模拟进度更新
-        pass
+        # 这个方法由定时器调用，用于更新执行状态
+        # 实际的状态更新通过信号机制处理，这里可以做一些UI状态检查
+        try:
+            # 检查按钮状态是否一致
+            if not self.execute_btn.isEnabled() and not self.stop_btn.isEnabled():
+                # 如果两个按钮都被禁用，可能是异常状态，重置为可执行状态
+                self.execute_btn.setEnabled(True)
+                self.stop_btn.setEnabled(False)
+                self.execution_timer.stop()
+        except Exception as e:
+            print(f"更新执行状态时出错: {e}")
         
     def add_log_message(self, message, level="INFO"):
         """添加日志消息"""

@@ -167,13 +167,41 @@ class FileManager:
     
     @staticmethod
     def save_project(file_path: str, workflow_data: Dict[str, Any]) -> bool:
-        """保存项目文件"""
+        """保存项目文件（增强安全性）"""
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            # 输入验证
+            if not file_path or not isinstance(file_path, str):
+                raise ValueError("文件路径不能为空且必须是字符串")
+
+            if not workflow_data or not isinstance(workflow_data, dict):
+                raise ValueError("工作流数据不能为空且必须是字典")
+
+            # 路径安全检查
+            abs_path = os.path.abspath(file_path)
+            if not abs_path.endswith(('.json', '.vml')):
+                raise ValueError("文件扩展名必须是.json或.vml")
+
+            # 确保目录存在
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+
+            # 原子写入（先写临时文件，再重命名）
+            temp_path = abs_path + '.tmp'
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(workflow_data, f, indent=2, ensure_ascii=False)
+
+            # 原子重命名
+            os.replace(temp_path, abs_path)
             return True
+
         except Exception as e:
             print(f"保存文件失败: {e}")
+            # 清理临时文件
+            temp_path = file_path + '.tmp'
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
             return False
             
     @staticmethod
@@ -192,15 +220,34 @@ class FileManager:
     @staticmethod
     def get_recent_files(max_count: int = 10) -> List[str]:
         """获取最近打开的文件列表"""
-        # 这里可以实现最近文件的管理
-        # 暂时返回空列表
-        return []
-        
+        try:
+            from .config_manager import config_manager
+            recent_files = config_manager.get_setting('recent_files', [])
+            return recent_files[:max_count]
+        except Exception:
+            return []
+
     @staticmethod
     def add_recent_file(file_path: str):
         """添加到最近文件列表"""
-        # 这里可以实现最近文件的管理
-        pass
+        try:
+            from .config_manager import config_manager
+            recent_files = config_manager.get_setting('recent_files', [])
+
+            # 移除已存在的路径
+            if file_path in recent_files:
+                recent_files.remove(file_path)
+
+            # 添加到开头
+            recent_files.insert(0, file_path)
+
+            # 限制最大数量
+            max_recent = config_manager.get_setting('file.recent_projects_max', 10)
+            recent_files = recent_files[:max_recent]
+
+            config_manager.set_setting('recent_files', recent_files)
+        except Exception as e:
+            print(f"添加最近文件失败: {e}")
 
 
 class ComponentValidator:

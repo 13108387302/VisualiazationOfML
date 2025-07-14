@@ -5,10 +5,12 @@
 管理组件属性的显示和配置
 """
 
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QScrollArea, 
-                             QGroupBox, QFormLayout, QLineEdit, QComboBox, 
-                             QSpinBox, QDoubleSpinBox, QCheckBox, QSpacerItem, 
-                             QSizePolicy)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QScrollArea,
+                             QGroupBox, QFormLayout, QLineEdit, QComboBox,
+                             QSpinBox, QDoubleSpinBox, QCheckBox, QSpacerItem,
+                             QSizePolicy, QHBoxLayout, QSlider, QPushButton,
+                             QFileDialog, QTextEdit, QListWidget, QTableWidget,
+                             QTableWidgetItem, QTabWidget, QFrame)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -22,6 +24,7 @@ class PropertyPanel(QWidget):
         super().__init__()
         self.current_component = None
         self.property_widgets = {}
+        self.update_timer = None  # 延迟更新定时器
         self.init_ui()
         
     def init_ui(self):
@@ -64,7 +67,23 @@ class PropertyPanel(QWidget):
         self.property_widgets.clear()
                 
     def show_component_properties(self, component):
-        """显示组件属性"""
+        """显示组件属性（使用延迟更新优化性能）"""
+        # 使用定时器延迟更新，避免频繁更新
+        if self.update_timer:
+            self.update_timer.stop()
+
+        from PyQt5.QtCore import QTimer
+        self.update_timer = QTimer()
+        self.update_timer.setSingleShot(True)
+        self.update_timer.timeout.connect(lambda: self._do_show_properties(component))
+        self.update_timer.start(50)  # 50ms延迟
+
+    def _do_show_properties(self, component):
+        """实际执行属性显示（优化版本）"""
+        # 如果是同一个组件，不需要重新构建界面
+        if self.current_component == component:
+            return
+
         self.clear_properties()
         self.current_component = component
         
@@ -295,6 +314,11 @@ class PropertyPanel(QWidget):
     def _on_property_changed(self, prop_name, value):
         """属性值改变处理"""
         if self.current_component:
+            # 保存属性到组件
+            if not hasattr(self.current_component, 'custom_properties'):
+                self.current_component.custom_properties = {}
+            self.current_component.custom_properties[prop_name] = value
+
             self.property_changed.emit(self.current_component, prop_name, value)
             
     def get_component_properties(self):
@@ -320,13 +344,72 @@ class PropertyPanel(QWidget):
         for prop_name, value in properties.items():
             if prop_name in self.property_widgets:
                 widget = self.property_widgets[prop_name]
-                if isinstance(widget, QLineEdit):
-                    widget.setText(str(value))
-                elif isinstance(widget, QComboBox):
-                    index = widget.findText(str(value))
-                    if index >= 0:
-                        widget.setCurrentIndex(index)
-                elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-                    widget.setValue(value)
-                elif isinstance(widget, QCheckBox):
-                    widget.setChecked(bool(value))
+                try:
+                    if isinstance(widget, QLineEdit):
+                        widget.setText(str(value))
+                    elif isinstance(widget, QComboBox):
+                        index = widget.findText(str(value))
+                        if index >= 0:
+                            widget.setCurrentIndex(index)
+                    elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                        widget.setValue(value)
+                    elif isinstance(widget, QCheckBox):
+                        widget.setChecked(bool(value))
+                except Exception as e:
+                    print(f"设置属性 {prop_name} 失败: {e}")
+
+    def create_slider_widget(self, prop_name, prop_config):
+        """创建滑块控件"""
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        slider = QSlider(Qt.Horizontal)
+        slider.setMinimum(prop_config.get('min', 0))
+        slider.setMaximum(prop_config.get('max', 100))
+        slider.setValue(prop_config.get('default', 50))
+
+        value_label = QLabel(str(slider.value()))
+
+        def on_value_changed(value):
+            value_label.setText(str(value))
+            self.property_changed.emit(self.current_component, prop_name, value)
+
+        slider.valueChanged.connect(on_value_changed)
+
+        layout.addWidget(slider)
+        layout.addWidget(value_label)
+
+        return container
+
+    def create_file_widget(self, prop_name, prop_config):
+        """创建文件选择控件"""
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        line_edit = QLineEdit()
+        line_edit.setText(prop_config.get('default', ''))
+        line_edit.setPlaceholderText(prop_config.get('placeholder', '选择文件...'))
+
+        browse_btn = QPushButton("浏览...")
+        browse_btn.setMaximumWidth(60)
+
+        def browse_file():
+            file_filter = prop_config.get('filter', 'All Files (*)')
+            file_path, _ = QFileDialog.getOpenFileName(self, "选择文件", "", file_filter)
+            if file_path:
+                line_edit.setText(file_path)
+                self.property_changed.emit(self.current_component, prop_name, file_path)
+
+        browse_btn.clicked.connect(browse_file)
+
+        def on_text_changed():
+            self.property_changed.emit(self.current_component, prop_name, line_edit.text())
+
+        line_edit.textChanged.connect(on_text_changed)
+
+        layout.addWidget(line_edit)
+        layout.addWidget(browse_btn)
+
+        return container

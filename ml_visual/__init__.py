@@ -17,6 +17,10 @@ from .startup_dialog import StartupDialog
 from .execution_panel import ExecutionPanel
 from .data_preview import DataPreviewPanel
 from .backend_adapter import BackendAdapter, backend_adapter
+from .command_manager import CommandManager
+from .clipboard_manager import ClipboardManager, clipboard_manager
+from .shortcut_manager import ShortcutManager
+from .theme_manager import ThemeManager, theme_manager
 
 __all__ = [
     'MLVisualizationUI',
@@ -30,5 +34,11 @@ __all__ = [
     'ExecutionPanel',
     'DataPreviewPanel',
     'BackendAdapter',
-    'backend_adapter'
+    'backend_adapter',
+    'CommandManager',
+    'ClipboardManager',
+    'clipboard_manager',
+    'ShortcutManager',
+    'ThemeManager',
+    'theme_manager'
 ]

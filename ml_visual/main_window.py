@@ -6,11 +6,12 @@
 """
 
 import json
+from typing import Optional, Any
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
                              QToolBar, QMenuBar, QStatusBar, QMessageBox,
-                             QFileDialog, QApplication)
+                             QFileDialog, QApplication, QLabel, QSizePolicy, QSpacerItem)
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QCloseEvent
 
 from .canvas import MLCanvas
 from .component_library import ComponentLibrary
@@ -19,6 +20,9 @@ from .startup_dialog import StartupDialog
 from .execution_panel import ExecutionPanel
 from .data_preview import DataPreviewPanel
 from .backend_adapter import backend_adapter
+from .shortcut_manager import ShortcutManager
+from .theme_manager import theme_manager
+from .config_manager import config_manager, get_ui_config, get_config
 
 
 class MLVisualizationUI(QMainWindow):
@@ -28,15 +32,22 @@ class MLVisualizationUI(QMainWindow):
         super().__init__()
         self.current_file = project_path
         self.is_modified = False
+
+        # 快捷键管理器
+        self.shortcut_manager = ShortcutManager(self)
+
         self.init_ui()
         self.connect_signals()
-        self.dia=None
+        self.setup_shortcuts()
+        # 初始化最近文件管理
+        from .utils import FileManager
+        self.file_manager = FileManager()
         # 如果有项目路径，则加载项目
         if project_path:
             self.load_project_file(project_path)
 
     @staticmethod
-    def show_startup_dialog():
+    def show_startup_dialog() -> Optional['MLVisualizationUI']:
         """显示启动对话框并返回主窗口实例"""
         dialog = StartupDialog()
         # 连接新建项目信号
@@ -48,16 +59,26 @@ class MLVisualizationUI(QMainWindow):
 
         if dialog.exec_() == StartupDialog.Accepted:
             project_path = dialog.get_selected_project()
-            mlv=MLVisualizationUI(project_path)
-            mlv.dia=dialog
+            mlv = MLVisualizationUI(project_path)
+            # 不需要保存dialog引用，它会在函数结束时自动清理
             return mlv
         else:
             return None
         
-    def init_ui(self):
+    def init_ui(self) -> None:
         """初始化用户界面"""
-        self.setWindowTitle("机器学习可视化工具")
-        self.setGeometry(100, 100, 1400, 900)
+        # 从配置获取窗口设置
+        ui_config = get_ui_config()
+        window_config = ui_config.get('window', {})
+
+        title = window_config.get('title', '机器学习可视化工具')
+        default_size = window_config.get('default_size', [1400, 900])
+        min_size = window_config.get('minimum_size', [800, 600])
+        geometry = window_config.get('geometry', [100, 100])
+
+        self.setWindowTitle(title)
+        self.setGeometry(geometry[0], geometry[1], default_size[0], default_size[1])
+        self.setMinimumSize(min_size[0], min_size[1])
         
         # 创建菜单栏
         self.create_menu_bar()
@@ -68,15 +89,19 @@ class MLVisualizationUI(QMainWindow):
         # 创建主界面
         self.create_main_widget()
         
-        # 创建状态栏
-        self.statusBar().showMessage("就绪")
+        # 创建增强状态栏
+        self.create_enhanced_status_bar()
         
     def create_menu_bar(self):
         """创建菜单栏"""
         menubar = self.menuBar()
         
+        # 从配置获取菜单文本
+        ui_config = get_ui_config()
+        menu_config = ui_config.get('menu', {})
+
         # 文件菜单
-        file_menu = menubar.addMenu('文件(&F)')
+        file_menu = menubar.addMenu(menu_config.get('file_text', '文件(&F)'))
         
         new_action = file_menu.addAction('新建(&N)')
         new_action.setShortcut(QKeySequence.New)
@@ -101,29 +126,45 @@ class MLVisualizationUI(QMainWindow):
         exit_action.triggered.connect(self.close)
         
         # 编辑菜单
-        edit_menu = menubar.addMenu('编辑(&E)')
+        edit_menu = menubar.addMenu(menu_config.get('edit_text', '编辑(&E)'))
         
-        undo_action = edit_menu.addAction('撤销(&U)')
-        undo_action.setShortcut(QKeySequence.Undo)
-        undo_action.triggered.connect(self.undo)
-        
-        redo_action = edit_menu.addAction('重做(&R)')
-        redo_action.setShortcut(QKeySequence.Redo)
-        redo_action.triggered.connect(self.redo)
-        
+        self.undo_action = edit_menu.addAction('撤销(&U)')
+        self.undo_action.setShortcut(QKeySequence.Undo)
+        self.undo_action.triggered.connect(self.undo)
+        self.undo_action.setEnabled(False)
+
+        self.redo_action = edit_menu.addAction('重做(&R)')
+        self.redo_action.setShortcut(QKeySequence.Redo)
+        self.redo_action.triggered.connect(self.redo)
+        self.redo_action.setEnabled(False)
+
         edit_menu.addSeparator()
-        
-        copy_action = edit_menu.addAction('复制(&C)')
-        copy_action.setShortcut(QKeySequence.Copy)
-        copy_action.triggered.connect(self.copy)
-        
-        paste_action = edit_menu.addAction('粘贴(&P)')
-        paste_action.setShortcut(QKeySequence.Paste)
-        paste_action.triggered.connect(self.paste)
-        
-        delete_action = edit_menu.addAction('删除(&D)')
-        delete_action.setShortcut(QKeySequence.Delete)
-        delete_action.triggered.connect(self.delete_selected)
+
+        self.copy_action = edit_menu.addAction('复制(&C)')
+        self.copy_action.setShortcut(QKeySequence.Copy)
+        self.copy_action.triggered.connect(self.copy)
+        self.copy_action.setEnabled(False)
+
+        self.cut_action = edit_menu.addAction('剪切(&X)')
+        self.cut_action.setShortcut(QKeySequence.Cut)
+        self.cut_action.triggered.connect(self.cut)
+        self.cut_action.setEnabled(False)
+
+        self.paste_action = edit_menu.addAction('粘贴(&V)')
+        self.paste_action.setShortcut(QKeySequence.Paste)
+        self.paste_action.triggered.connect(self.paste)
+        self.paste_action.setEnabled(False)
+
+        edit_menu.addSeparator()
+
+        self.delete_action = edit_menu.addAction('删除(&D)')
+        self.delete_action.setShortcut(QKeySequence.Delete)
+        self.delete_action.triggered.connect(self.delete)
+        self.delete_action.setEnabled(False)
+
+        self.select_all_action = edit_menu.addAction('全选(&A)')
+        self.select_all_action.setShortcut(QKeySequence.SelectAll)
+        self.select_all_action.triggered.connect(self.select_all)
         
         # 视图菜单
         view_menu = menubar.addMenu('视图(&V)')
@@ -138,17 +179,28 @@ class MLVisualizationUI(QMainWindow):
         
         fit_action = view_menu.addAction('适应窗口(&F)')
         fit_action.triggered.connect(self.fit_to_window)
+
+        view_menu.addSeparator()
+
+        # 主题菜单
+        theme_menu = view_menu.addMenu('主题(&T)')
+
+        light_theme_action = theme_menu.addAction('浅色主题')
+        light_theme_action.triggered.connect(lambda: self.switch_theme('light'))
+
+        dark_theme_action = theme_menu.addAction('深色主题')
+        dark_theme_action.triggered.connect(lambda: self.switch_theme('dark'))
         
         # 运行菜单
         run_menu = menubar.addMenu('运行(&R)')
         
         execute_action = run_menu.addAction('执行流程(&E)')
         execute_action.setShortcut('F5')
-        execute_action.triggered.connect(self.run_pipeline)
-        
+        execute_action.triggered.connect(lambda: self.execution_panel.start_execution())
+
         stop_action = run_menu.addAction('停止执行(&S)')
         stop_action.setShortcut('Shift+F5')
-        stop_action.triggered.connect(self.stop_pipeline)
+        stop_action.triggered.connect(lambda: self.execution_panel.stop_execution())
         
         # 帮助菜单
         help_menu = menubar.addMenu('帮助(&H)')
@@ -179,63 +231,231 @@ class MLVisualizationUI(QMainWindow):
         toolbar.addSeparator()
         
         # 运行操作
-        toolbar.addAction('运行', self.run_pipeline)
-        toolbar.addAction('停止', self.stop_pipeline)
+        toolbar.addAction('运行', lambda: self.execution_panel.start_execution())
+        toolbar.addAction('停止', lambda: self.execution_panel.stop_execution())
         
     def create_main_widget(self):
-        """创建主界面"""
+        """创建主界面 - 重新设计布局突出主次功能"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # 主布局
-        main_layout = QHBoxLayout(central_widget)
+        # 从配置获取布局设置
+        ui_config = get_ui_config()
+        layout_config = ui_config.get('layout', {})
+        main_margins = layout_config.get('main_margins', [5, 5, 5, 5])
+        main_spacing = layout_config.get('main_spacing', 5)
 
-        # 创建主分割器（水平）
-        main_splitter = QSplitter(Qt.Horizontal)
+        # 主布局 - 垂直布局，分为工作区和底部面板
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(*main_margins)
+        main_layout.setSpacing(main_spacing)
 
-        # 左侧面板 - 组件库
+        # 创建工作区（主要区域）
+        work_area = self.create_work_area()
+        main_layout.addWidget(work_area, 4)  # 占主要空间
+
+        # 创建底部面板（次要区域）
+        bottom_panel = self.create_bottom_panel()
+        main_layout.addWidget(bottom_panel, 1)  # 占较少空间
+
+    def create_work_area(self):
+        """创建工作区 - 包含组件库、画布和属性面板"""
+        work_splitter = QSplitter(Qt.Horizontal)
+
+        # 左侧：组件库（可折叠）
+        left_panel = self.create_left_panel()
+        work_splitter.addWidget(left_panel)
+
+        # 中间：画布区域（主要工作区）
+        canvas_area = self.create_canvas_area()
+        work_splitter.addWidget(canvas_area)
+
+        # 右侧：属性和预览面板（可折叠）
+        right_panel = self.create_right_panel()
+        work_splitter.addWidget(right_panel)
+
+        # 从配置获取分割器比例
+        ui_config = get_ui_config()
+        panels_config = ui_config.get('panels', {})
+        splitter_sizes = panels_config.get('splitter_sizes', [300, 900, 300])
+
+        # 设置分割器比例
+        work_splitter.setSizes(splitter_sizes)
+        work_splitter.setCollapsible(0, True)  # 左侧可折叠
+        work_splitter.setCollapsible(2, True)  # 右侧可折叠
+
+        return work_splitter
+
+    def create_left_panel(self):
+        """创建左侧面板 - 组件库"""
+        from PyQt5.QtWidgets import QFrame
+
+        # 从配置获取面板大小
+        ui_config = get_ui_config()
+        panels_config = ui_config.get('panels', {})
+        left_min_width = panels_config.get('left_min_width', 200)
+        left_max_width = panels_config.get('left_max_width', 400)
+
+        left_frame = QFrame()
+        left_frame.setFrameStyle(QFrame.StyledPanel)
+        left_frame.setMinimumWidth(left_min_width)
+        left_frame.setMaximumWidth(left_max_width)
+
+        layout = QVBoxLayout(left_frame)
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        # 标题
+        from PyQt5.QtWidgets import QLabel
+        from PyQt5.QtGui import QFont
+        title = QLabel("组件库")
+        title.setFont(QFont("Arial", 12, QFont.Bold))
+        title.setStyleSheet("color: #2c3e50; padding: 5px;")
+        layout.addWidget(title)
+
+        # 组件库
         self.component_library = ComponentLibrary()
-        self.component_library.setMaximumWidth(250)
-        self.component_library.setMinimumWidth(200)
+        layout.addWidget(self.component_library)
 
-        # 中间区域 - 画布和执行面板
-        center_widget = QWidget()
-        center_layout = QVBoxLayout(center_widget)
-        center_layout.setContentsMargins(0, 0, 0, 0)
+        return left_frame
+
+    def create_canvas_area(self):
+        """创建画布区域 - 主要工作区"""
+        from PyQt5.QtWidgets import QFrame
+
+        canvas_frame = QFrame()
+        canvas_frame.setFrameStyle(QFrame.StyledPanel)
+
+        layout = QVBoxLayout(canvas_frame)
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        # 画布工具栏
+        canvas_toolbar = self.create_canvas_toolbar()
+        layout.addWidget(canvas_toolbar)
 
         # 画布
         self.canvas = MLCanvas()
-        center_layout.addWidget(self.canvas, 3)  # 占3/4空间
+        self.canvas.setStyleSheet("""
+            MLCanvas {
+                background-color: #ffffff;
+                border: 2px solid #bdc3c7;
+                border-radius: 5px;
+            }
+        """)
+        layout.addWidget(self.canvas)
 
-        # 执行面板
-        self.execution_panel = ExecutionPanel()
-        center_layout.addWidget(self.execution_panel, 1)  # 占1/4空间
+        return canvas_frame
 
-        # 右侧分割器（垂直）
-        right_splitter = QSplitter(Qt.Vertical)
+    def create_canvas_toolbar(self):
+        """创建画布工具栏"""
+        # QSizePolicy和QSpacerItem已在顶部导入
 
-        # 属性配置面板
+        toolbar = QToolBar()
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        toolbar.setStyleSheet("""
+            QToolBar {
+                background-color: #ecf0f1;
+                border: 1px solid #bdc3c7;
+                border-radius: 3px;
+                padding: 2px;
+            }
+            QToolButton {
+                padding: 4px 8px;
+                margin: 1px;
+                border-radius: 3px;
+            }
+            QToolButton:hover {
+                background-color: #d5dbdb;
+            }
+        """)
+
+        # 添加常用操作
+        toolbar.addAction("▶ 运行", lambda: self.execution_panel.start_execution())
+        toolbar.addAction("⏹ 停止", lambda: self.execution_panel.stop_execution())
+        toolbar.addSeparator()
+        toolbar.addAction("↶ 撤销", self.undo)
+        toolbar.addAction("↷ 重做", self.redo)
+        toolbar.addSeparator()
+        toolbar.addAction("📋 复制", self.copy)
+        toolbar.addAction("✂ 剪切", self.cut)
+        toolbar.addAction("📄 粘贴", self.paste)
+        toolbar.addSeparator()
+        toolbar.addAction("🔍+ 放大", self.zoom_in)
+        toolbar.addAction("🔍- 缩小", self.zoom_out)
+        toolbar.addAction("⬜ 适应", self.fit_to_window)
+
+        # 添加弹性空间
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+
+        # 添加状态信息
+        self.canvas_status = QLabel("就绪")
+        self.canvas_status.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+        toolbar.addWidget(self.canvas_status)
+
+        return toolbar
+
+    def create_right_panel(self):
+        """创建右侧面板 - 属性和预览"""
+        from PyQt5.QtWidgets import QTabWidget, QFrame
+
+        # 从配置获取面板大小
+        ui_config = get_ui_config()
+        panels_config = ui_config.get('panels', {})
+        right_min_width = panels_config.get('right_min_width', 250)
+        right_max_width = panels_config.get('right_max_width', 400)
+
+        right_frame = QFrame()
+        right_frame.setFrameStyle(QFrame.StyledPanel)
+        right_frame.setMinimumWidth(right_min_width)
+        right_frame.setMaximumWidth(right_max_width)
+
+        layout = QVBoxLayout(right_frame)
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        # 使用标签页组织右侧面板
+        right_tabs = QTabWidget()
+        right_tabs.setTabPosition(QTabWidget.North)
+
+        # 属性配置标签页
         self.property_panel = PropertyPanel()
-        right_splitter.addWidget(self.property_panel)
+        right_tabs.addTab(self.property_panel, "⚙ 属性")
 
-        # 数据预览面板
+        # 数据预览标签页
         self.data_preview_panel = DataPreviewPanel()
-        right_splitter.addWidget(self.data_preview_panel)
+        right_tabs.addTab(self.data_preview_panel, "📊 数据")
 
-        # 设置右侧分割器比例
-        right_splitter.setSizes([300, 300])
-        right_splitter.setMaximumWidth(350)
-        right_splitter.setMinimumWidth(300)
+        layout.addWidget(right_tabs)
 
-        # 添加到主分割器
-        main_splitter.addWidget(self.component_library)
-        main_splitter.addWidget(center_widget)
-        main_splitter.addWidget(right_splitter)
+        return right_frame
 
-        # 设置主分割器比例
-        main_splitter.setSizes([250, 800, 350])
+    def create_bottom_panel(self):
+        """创建底部面板 - 执行状态和日志"""
+        from PyQt5.QtWidgets import QTabWidget, QFrame
 
-        main_layout.addWidget(main_splitter)
+        bottom_frame = QFrame()
+        bottom_frame.setFrameStyle(QFrame.StyledPanel)
+        bottom_frame.setMaximumHeight(300)
+        bottom_frame.setMinimumHeight(150)
+
+        layout = QVBoxLayout(bottom_frame)
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        # 使用标签页组织底部面板
+        bottom_tabs = QTabWidget()
+        bottom_tabs.setTabPosition(QTabWidget.North)
+
+        # 执行面板标签页
+        self.execution_panel = ExecutionPanel()
+        bottom_tabs.addTab(self.execution_panel, "🚀 执行")
+
+        # 可以添加更多标签页，如调试信息、帮助等
+        # debug_panel = QWidget()
+        # bottom_tabs.addTab(debug_panel, "🐛 调试")
+
+        layout.addWidget(bottom_tabs)
+
+        return bottom_frame
         
     def connect_signals(self):
         """连接信号"""
@@ -243,6 +463,9 @@ class MLVisualizationUI(QMainWindow):
         self.canvas.component_selected.connect(self.on_component_selected)
         self.canvas.component_added.connect(self.on_component_added)
         self.canvas.connection_created.connect(self.on_connection_created)
+        self.canvas.can_undo_changed.connect(self.on_can_undo_changed)
+        self.canvas.can_redo_changed.connect(self.on_can_redo_changed)
+        self.canvas.selection_changed.connect(self.on_selection_changed)
 
         # 属性面板信号
         self.property_panel.property_changed.connect(self.on_property_changed)
@@ -399,10 +622,11 @@ class MLVisualizationUI(QMainWindow):
         """保存项目"""
         if self.current_file:
             self._save_to_file(self.current_file)
-            self.dia.add_to_recent(self.current_file)
+            self.file_manager.add_recent_file(self.current_file)
         else:
             self.save_project_as()
-            self.dia.add_to_recent(self.current_file)
+            if self.current_file:
+                self.file_manager.add_recent_file(self.current_file)
             
     def save_project_as(self):
         """另存为项目"""
@@ -411,6 +635,10 @@ class MLVisualizationUI(QMainWindow):
         )
         if file_path:
             self._save_to_file(file_path)
+
+    def save_as(self):
+        """另存为（快捷键方法）"""
+        self.save_project_as()
             
     def _save_to_file(self, file_path):
         """保存到文件"""
@@ -456,35 +684,217 @@ class MLVisualizationUI(QMainWindow):
         return True
         
     def closeEvent(self, event):
-        """关闭事件"""
+        """关闭事件（增强清理）"""
         if self.check_save_changes():
+            self.cleanup_resources()
             event.accept()
         else:
             event.ignore()
+
+    def cleanup_resources(self):
+        """清理资源"""
+        try:
+            # 清理画布资源
+            if hasattr(self, 'canvas'):
+                self.canvas.scene.clear()
+                self.canvas.components.clear()
+                self.canvas.connections.clear()
+
+            # 清理命令历史
+            if hasattr(self, 'canvas') and hasattr(self.canvas, 'command_manager'):
+                if hasattr(self.canvas.command_manager, 'history'):
+                    self.canvas.command_manager.history.clear()
+
+            # 强制垃圾回收
+            import gc
+            gc.collect()
+
+        except Exception as e:
+            print(f"清理资源时出错: {e}")
+
+    def create_enhanced_status_bar(self):
+        """创建增强状态栏"""
+        status_bar = self.statusBar()
+
+        # 主状态标签
+        self.status_label = QLabel("就绪")
+        status_bar.addWidget(self.status_label)
+
+        # 添加分隔符
+        status_bar.addPermanentWidget(QLabel("|"))
+
+        # 组件计数
+        self.component_count_label = QLabel("组件: 0")
+        status_bar.addPermanentWidget(self.component_count_label)
+
+        # 添加分隔符
+        status_bar.addPermanentWidget(QLabel("|"))
+
+        # 缩放级别
+        self.zoom_label = QLabel("缩放: 100%")
+        status_bar.addPermanentWidget(self.zoom_label)
+
+        # 添加分隔符
+        status_bar.addPermanentWidget(QLabel("|"))
+
+        # 内存使用（如果可用）
+        try:
+            from .memory_manager import get_memory_usage
+            memory_info = get_memory_usage()
+            if memory_info and memory_info.get('rss', 0) > 0:
+                self.memory_label = QLabel(f"内存: {memory_info['rss']:.0f}MB")
+                status_bar.addPermanentWidget(self.memory_label)
+
+                # 定时更新内存信息
+                from PyQt5.QtCore import QTimer
+                self.memory_timer = QTimer()
+                self.memory_timer.timeout.connect(self.update_memory_status)
+                self.memory_timer.start(5000)  # 每5秒更新
+        except:
+            pass
+
+    def update_status(self, message):
+        """更新状态消息"""
+        if hasattr(self, 'status_label'):
+            self.status_label.setText(message)
+
+    def update_component_count(self):
+        """更新组件计数"""
+        if hasattr(self, 'component_count_label') and hasattr(self, 'canvas'):
+            count = len(self.canvas.components)
+            self.component_count_label.setText(f"组件: {count}")
+
+    def update_zoom_level(self):
+        """更新缩放级别"""
+        if hasattr(self, 'zoom_label') and hasattr(self, 'canvas'):
+            scale = self.canvas.transform().m11()
+            zoom_percent = int(scale * 100)
+            self.zoom_label.setText(f"缩放: {zoom_percent}%")
+
+    def update_memory_status(self):
+        """更新内存状态"""
+        try:
+            from .memory_manager import get_memory_usage
+            memory_info = get_memory_usage()
+            if memory_info and hasattr(self, 'memory_label'):
+                self.memory_label.setText(f"内存: {memory_info['rss']:.0f}MB")
+        except:
+            pass
         
     def undo(self):
         """撤销"""
-        self.statusBar().showMessage("撤销功能待实现")
-        
+        self.canvas.undo()
+        self.statusBar().showMessage(f"已执行: {self.canvas.get_undo_text()}")
+
     def redo(self):
         """重做"""
-        self.statusBar().showMessage("重做功能待实现")
-        
+        self.canvas.redo()
+        self.statusBar().showMessage(f"已执行: {self.canvas.get_redo_text()}")
+
+    def on_can_undo_changed(self, can_undo):
+        """撤销状态改变"""
+        self.undo_action.setEnabled(can_undo)
+        if can_undo:
+            self.undo_action.setText(self.canvas.get_undo_text())
+        else:
+            self.undo_action.setText("撤销(&U)")
+
+    def on_can_redo_changed(self, can_redo):
+        """重做状态改变"""
+        self.redo_action.setEnabled(can_redo)
+        if can_redo:
+            self.redo_action.setText(self.canvas.get_redo_text())
+        else:
+            self.redo_action.setText("重做(&R)")
+
     def copy(self):
         """复制"""
-        self.statusBar().showMessage("复制功能待实现")
-        
+        self.canvas.copy_selected()
+        self.statusBar().showMessage("已复制选中的组件")
+
+    def cut(self):
+        """剪切"""
+        self.canvas.cut_selected()
+        self.statusBar().showMessage("已剪切选中的组件")
+
     def paste(self):
         """粘贴"""
-        self.statusBar().showMessage("粘贴功能待实现")
+        self.canvas.paste()
+        self.statusBar().showMessage("已粘贴组件")
+
+    def delete(self):
+        """删除"""
+        self.canvas.delete_selected()
+        self.statusBar().showMessage("已删除选中的组件")
+
+    def select_all(self):
+        """全选"""
+        self.canvas.select_all()
+        self.statusBar().showMessage("已全选组件")
+
+    def on_selection_changed(self, has_selection):
+        """选择状态改变（优化UI更新性能）"""
+        # 批量更新UI状态，减少重绘次数
+        self.copy_action.setEnabled(has_selection)
+        self.cut_action.setEnabled(has_selection)
+        self.delete_action.setEnabled(has_selection)
+
+        # 更新粘贴按钮状态
+        from .clipboard_manager import clipboard_manager
+        self.paste_action.setEnabled(clipboard_manager.has_content())
+
+        # 更新画布状态显示
+        if hasattr(self, 'canvas_status'):
+            selected_count = len(self.canvas.get_selected_components())
+            if selected_count > 0:
+                self.canvas_status.setText(f"已选择 {selected_count} 个组件")
+            else:
+                self.canvas_status.setText("就绪")
+
+    def setup_shortcuts(self):
+        """设置快捷键回调"""
+        # 文件操作
+        self.shortcut_manager.set_callback('new_project', self.new_project)
+        self.shortcut_manager.set_callback('open_project', self.open_project)
+        self.shortcut_manager.set_callback('save_project', self.save_project)
+        self.shortcut_manager.set_callback('save_as', self.save_as)
+        self.shortcut_manager.set_callback('quit', self.close)
+
+        # 编辑操作
+        self.shortcut_manager.set_callback('undo', self.undo)
+        self.shortcut_manager.set_callback('redo', self.redo)
+        self.shortcut_manager.set_callback('copy', self.copy)
+        self.shortcut_manager.set_callback('cut', self.cut)
+        self.shortcut_manager.set_callback('paste', self.paste)
+        self.shortcut_manager.set_callback('delete', self.delete)
+        self.shortcut_manager.set_callback('select_all', self.select_all)
+
+        # 视图操作
+        self.shortcut_manager.set_callback('zoom_in', self.zoom_in)
+        self.shortcut_manager.set_callback('zoom_out', self.zoom_out)
+        self.shortcut_manager.set_callback('zoom_fit', self.fit_to_window)
+
+        # 运行操作
+        self.shortcut_manager.set_callback('run', lambda: self.execution_panel.start_execution())
+        self.shortcut_manager.set_callback('stop', lambda: self.execution_panel.stop_execution())
+
+        # 帮助操作
+        self.shortcut_manager.set_callback('about', self.show_about)
+        self.shortcut_manager.set_callback('shortcuts', self.show_shortcuts_help)
+
+    def show_shortcuts_help(self):
+        """显示快捷键帮助"""
+        help_text = self.shortcut_manager.create_shortcuts_help_text()
+        QMessageBox.information(self, "快捷键帮助", help_text)
+
+    def switch_theme(self, theme_name: str):
+        """切换主题"""
+        if theme_manager.apply_theme(theme_name):
+            self.statusBar().showMessage(f"已切换到{theme_manager.get_theme_info(theme_name).get('name', theme_name)}主题")
+        else:
+            self.statusBar().showMessage(f"切换主题失败: {theme_name}")
         
-    def delete_selected(self):
-        """删除选中项"""
-        selected_items = self.canvas.scene.selectedItems()
-        for item in selected_items:
-            if hasattr(item, 'parent_component'):  # 是组件
-                self.canvas.remove_component(item)
-        self.statusBar().showMessage("已删除选中项")
+
         
     def zoom_in(self):
         """放大"""
@@ -498,20 +908,7 @@ class MLVisualizationUI(QMainWindow):
         """适应窗口"""
         self.canvas.fit_to_contents()
         
-    def run_pipeline(self):
-        """执行流程"""
-        workflow_data = self.canvas.get_workflow_data()
-        if not workflow_data['components']:
-            QMessageBox.information(self, "提示", "请先添加组件到画布")
-            return
-            
-        self.statusBar().showMessage("执行机器学习流程...")
-        # 这里可以调用后端执行引擎
-        QTimer.singleShot(2000, lambda: self.statusBar().showMessage("流程执行完成"))
-        
-    def stop_pipeline(self):
-        """停止执行"""
-        self.statusBar().showMessage("停止执行")
+
         
     def show_about(self):
         """显示关于对话框"""

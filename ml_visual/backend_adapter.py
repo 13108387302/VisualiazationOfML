@@ -7,6 +7,9 @@
 
 import json
 import uuid
+import os
+import sys
+import importlib.util
 from typing import Dict, Any, Optional, Callable
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTimer
 
@@ -28,13 +31,41 @@ class BackendAdapter(QObject):
     
     def __init__(self):
         super().__init__()
-        self.backend_module = None
+        self.backend_implementation = None
         self.current_executions = {}
         self.data_cache = {}
-        
-    def set_backend_module(self, backend_module):
-        """设置后端模块"""
-        self.backend_module = backend_module
+
+        # 尝试加载后端实现
+        self._load_backend_implementation()
+
+    def set_backend_implementation(self, backend_impl):
+        """设置后端实现"""
+        self.backend_implementation = backend_impl
+
+    def _load_backend_implementation(self):
+        """加载后端实现"""
+        try:
+            # 尝试从backend_implementation.py加载
+            import importlib.util
+            backend_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend_implementation.py')
+
+            if os.path.exists(backend_file):
+                spec = importlib.util.spec_from_file_location("backend_implementation", backend_file)
+                backend_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(backend_module)
+
+                # 查找BackendImplementation类
+                if hasattr(backend_module, 'BackendImplementation'):
+                    self.backend_implementation = backend_module.BackendImplementation()
+                    print("✅ 后端实现加载成功")
+                else:
+                    print("⚠️ 后端文件中未找到BackendImplementation类")
+            else:
+                print("ℹ️ 未找到backend_implementation.py，使用模拟后端")
+
+        except Exception as e:
+            print(f"⚠️ 加载后端实现失败: {e}")
+            print("ℹ️ 将使用模拟后端进行开发和测试")
         
     def execute_workflow(self, workflow_data: Dict[str, Any]) -> str:
         """
@@ -47,18 +78,19 @@ class BackendAdapter(QObject):
             execution_id: 执行ID
         """
         execution_id = str(uuid.uuid4())
-        
-        if not self.backend_module:
-            # 模拟执行
+
+        if not self.backend_implementation:
+            # 使用模拟后端
             self._simulate_execution(execution_id, workflow_data)
         else:
-            # 调用实际后端
+            # 调用实际后端实现
             try:
-                result = self.backend_module.execute_workflow(workflow_data)
+                result = self.backend_implementation.execute_workflow(workflow_data)
                 if result.get('success'):
-                    self.current_executions[execution_id] = result.get('execution_id', execution_id)
+                    backend_execution_id = result.get('execution_id', execution_id)
+                    self.current_executions[execution_id] = backend_execution_id
                     self.execution_started.emit(execution_id)
-                    self._monitor_execution(execution_id)
+                    self._monitor_execution(execution_id, backend_execution_id)
                 else:
                     self.error_occurred.emit(
                         "EXECUTION_ERROR",
@@ -77,27 +109,29 @@ class BackendAdapter(QObject):
     def stop_execution(self, execution_id: str):
         """停止执行"""
         if execution_id in self.current_executions:
-            if self.backend_module:
+            if self.backend_implementation:
                 try:
                     backend_execution_id = self.current_executions[execution_id]
-                    self.backend_module.stop_execution(backend_execution_id)
+                    result = self.backend_implementation.stop_execution(backend_execution_id)
+                    if not result.get('success'):
+                        self.error_occurred.emit("STOP_ERROR", result.get('message', '停止失败'), "")
                 except Exception as e:
                     self.error_occurred.emit(
-                        "STOP_ERROR",
+                        "BACKEND_ERROR",
                         f"停止执行失败: {str(e)}",
                         str(e)
                     )
-            
+
             del self.current_executions[execution_id]
             
     def get_data_preview(self, data_id: str, rows: int = 10):
         """获取数据预览"""
-        if not self.backend_module:
+        if not self.backend_implementation:
             # 模拟数据预览
             self._simulate_data_preview(data_id, rows)
         else:
             try:
-                result = self.backend_module.get_data_preview(data_id, rows)
+                result = self.backend_implementation.get_data_preview(data_id, rows)
                 if result.get('success'):
                     self.data_preview_ready.emit(data_id, result)
                 else:
@@ -199,7 +233,7 @@ class BackendAdapter(QObject):
                 
                 self.component_completed.emit(
                     execution_id,
-                    component['id'],
+                    str(component.get('id', f'component_{self.simulation_step}')),
                     True,
                     component_result
                 )

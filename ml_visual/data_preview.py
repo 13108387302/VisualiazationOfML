@@ -53,45 +53,62 @@ class DataTableWidget(QWidget):
         self.setLayout(layout)
         
     def update_data(self, data_info):
-        """更新数据显示"""
+        """更新数据显示（优化表格性能）"""
         if not data_info:
             self.table.clear()
             self.info_label.setText("暂无数据")
             return
-            
+
         # 更新表格
         rows = data_info.get('preview_data', [])
         columns = data_info.get('columns', [])
-        
+
         if rows and columns:
+            # 禁用排序以提高性能
+            self.table.setSortingEnabled(False)
+
             self.table.setRowCount(len(rows))
             self.table.setColumnCount(len(columns))
             self.table.setHorizontalHeaderLabels(columns)
-            
-            for i, row in enumerate(rows):
-                for j, value in enumerate(row):
-                    item = QTableWidgetItem(str(value))
-                    self.table.setItem(i, j, item)
-                    
-            self.table.resizeColumnsToContents()
-            
+
+            # 批量设置数据，减少重绘
+            self.table.setUpdatesEnabled(False)
+            try:
+                for i, row in enumerate(rows):
+                    for j, value in enumerate(row):
+                        item = QTableWidgetItem(str(value))
+                        # 设置为只读以提高性能
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                        self.table.setItem(i, j, item)
+            finally:
+                self.table.setUpdatesEnabled(True)
+
+            # 延迟调整列宽，避免频繁计算
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, self.table.resizeColumnsToContents)
+
         # 更新信息
         shape = data_info.get('shape', [0, 0])
-        dtypes = data_info.get('dtypes', {})
         memory_usage = data_info.get('memory_usage', '0 MB')
-        
+
         info_text = f"形状: {shape[0]} 行 × {shape[1]} 列 | 内存使用: {memory_usage}"
         self.info_label.setText(info_text)
         
     def update_display(self):
         """更新显示行数"""
-        # 这里应该重新请求数据
-        pass
-        
+        # 如果有数据，重新显示指定行数
+        if hasattr(self, 'current_data') and self.current_data:
+            self.update_data(self.current_data)
+
     def refresh_data(self):
         """刷新数据"""
-        # 这里应该重新加载数据
-        pass
+        # 发射刷新信号给父组件
+        parent = self.parent()
+        while parent:
+            if hasattr(parent, 'refresh_data_preview'):
+                parent.refresh_data_preview()
+                break
+            parent = parent.parent()
 
 
 class DataStatisticsWidget(QWidget):
